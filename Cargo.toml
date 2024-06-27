@@ -1,0 +1,7 @@
+[package]
+name = "cshell"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+text_styler = {path = "../text_styler"}
