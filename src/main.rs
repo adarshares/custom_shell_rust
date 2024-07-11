@@ -1,7 +1,7 @@
 #![allow(warnings)]
 extern crate text_styler;
 use std::io::{stdin, Error, Write};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::env;
 
 use text_styler::TextStyler;
@@ -9,14 +9,15 @@ use text_styler::TextStyler;
 // enum builtin_command_list {
 //     cd,
 //     exit
-
-// }
+//implement internal trait on external
+//ctrlk ctrl0
+//ctrlk ctrlj
+// } wc -l flaw enter enter enter 
 
 fn main() {
 
     
     
-    // cd, exit, export, pwd and unset
     let builtin_command_list = vec![String::from("exit"),String::from("pwd"),String::from("cd"),String::from("export"),String::from("unset")];
     'mainloop: loop {
 
@@ -25,12 +26,12 @@ fn main() {
         let mut buf = command_input();
         if buf.len() == 0 {
             continue;
+        } else if buf == vec![String::from("exit")] {
+            break 'mainloop;
         }
 
         if builtin_command_list.contains(&buf[0]) {
-            if &buf[0] == &builtin_command_list[0] {
-                break 'mainloop;
-            } else if &buf[0] == &builtin_command_list[1] {
+            if &buf[0] == &builtin_command_list[1] {
 
                 match env::current_dir() {
                     Ok(path) => {
@@ -63,18 +64,16 @@ fn main() {
             for i in (1..buf.len()) {
                 output.arg(&buf[i]);
             }
-            match output.output() {
-                Ok(output) => {
-                    match String::from_utf8(output.stdout.clone()) {
-                        Ok(output) => {print!("{}",output);},
-                        Err(_)=> println!("{:#?}",output),
-                    }
+            let child = output.spawn();
+            println!("{:#?}",child);
+            match child {
+                Ok(mut child) => {
+                    println!("{:#?}",child);
+                    child.wait();
+                    println!("done process");
                 },
-                Err(err) => {
-                    match err {
-                        //std::io::ErrorKind::NotFound => {}
-                        _  => {println!("error running program or program does not exist")}
-                    }
+                Err(_) => {
+                    println!("No such file or directory");
                 }
             }
         }
@@ -83,14 +82,6 @@ fn main() {
 }
 
 fn handle_cd(buf:Vec<String>) {
-    // let x = env::current_dir();
-    // println!("{:#?}",x);
-    // env::set_current_dir("./../../");
-    // let x = env::current_dir();
-    // println!("{:#?}",x);
-    // env::set_current_dir("/");
-    // let x = env::current_dir();
-    // println!("{:#?}",x);
     if(buf.len() == 1) {
         return;
     }
