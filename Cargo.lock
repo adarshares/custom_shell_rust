@@ -5,10 +5,3 @@ version = 3
 [[package]]
 name = "cshell"
 version = "0.1.0"
-dependencies = [
- "text_styler",
-]
-
-[[package]]
-name = "text_styler"
-version = "0.1.0"

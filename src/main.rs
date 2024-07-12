@@ -1,11 +1,12 @@
 #![allow(warnings)]
-extern crate text_styler;
+//extern crate text_styler;
 use std::collections::VecDeque;
 use std::io::{stdin, Error, Read, Write};
 use std::process::{exit, Child, Command, Output, Stdio};
 use std::env;
 
-use text_styler::TextStyler;
+pub mod lib;
+use lib::TextStyler;
 
 // enum builtin_command_list {
 //     cd,
