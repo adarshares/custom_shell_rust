@@ -1,7 +1,8 @@
 #![allow(warnings)]
 extern crate text_styler;
-use std::io::{stdin, Error, Write};
-use std::process::{Command, Stdio};
+use std::collections::VecDeque;
+use std::io::{stdin, Error, Read, Write};
+use std::process::{exit, Child, Command, Output, Stdio};
 use std::env;
 
 use text_styler::TextStyler;
@@ -14,11 +15,249 @@ use text_styler::TextStyler;
 //ctrlk ctrlj
 // } wc -l flaw enter enter enter 
 
+/// executes the command if not has any pipe
+/// takes input command as a string
+/// if empty string then do nothing
+/// if env command then calls execute env command
+/// for rest commands spawns child process and waits for its finish
+fn execute_direct_command(command: String) {
+    let  builtin_command_list = [String::from("exit"),String::from("pwd"),String::from("cd"),String::from("export"),String::from("unset")];
+
+    let buf = single_command_vector(command);
+
+    if buf.len() == 0 {
+        println!("");
+        return;
+    }
+    if(builtin_command_list.contains(&buf[0])){
+        let output = execute_env_commands(buf);
+        match output {
+            Some(output) => {
+                println!("{}",output);
+            },
+            None => {return;}
+        }
+        return;
+    }
+        
+    let mut output = Command::new(&buf[0]);
+    for i in (1..buf.len()) {
+        output.arg(&buf[i]);
+    }
+    let child = output.spawn();
+    match child {
+        Ok(mut child) => {
+            child.wait();
+        },
+        Err(_) => {
+            println!("No such file or directory");
+        }
+    }
+}
+
+fn execute_first_command(first_command: String) -> Option<String>{
+    let  builtin_command_list = [String::from("exit"),String::from("pwd"),String::from("cd"),String::from("export"),String::from("unset")];
+    let mut buf = single_command_vector(first_command);
+    if(buf.len() == 0) {
+        println!("cannont start with pipe");
+        std::io::stdout().flush().unwrap();
+        return None;
+    }
+    if(builtin_command_list.contains(&buf[0])){
+        let output = execute_env_commands(buf);
+        return output;
+    }
+
+    let mut result = String::new();
+
+    let mut output = Command::new(&buf[0]);
+    for i in (1..buf.len()) {
+        output.arg(&buf[i]);
+    }
+    output.stdout(Stdio::piped());
+    let mut child = match output.spawn() {
+        Ok(child) => {
+            child
+        }
+        Err(_) => {
+            println!("failed to spawn child");
+            return None;
+        }
+    };
+    if let Some(mut child_out) = child.stdout.take() {
+        child_out.read_to_string(&mut result);
+    } else {
+        println!("failed to write the output in pipe");
+        return None;
+    }
+    child.wait();
+    return Some(result);
+}
+
+
+fn execute_last_command(last_command: String,mut result: String) {
+
+    let  builtin_command_list = [String::from("exit"),String::from("pwd"),String::from("cd"),String::from("export"),String::from("unset")];
+    let mut buf = single_command_vector(last_command);
+    if(buf.len() == 0) {
+        println!("cannont end with pipe");
+        std::io::stdout().flush().unwrap();
+        return;
+    }
+    if(builtin_command_list.contains(&buf[0])){
+        match execute_env_commands(buf) {
+            Some(output) => {
+                println!("{}",output);
+            }
+            None => {
+            }
+        }
+        return;
+    }
+
+    let mut output = Command::new(&buf[0]);
+    for i in (1..buf.len()) {
+        output.arg(&buf[i]);
+    }
+    output.stdin(Stdio::piped());
+    let mut child = match output.spawn() {
+        Ok(child) => {
+            child
+        },
+        Err(_) => {
+            println!("failed to spawn child");
+            return;
+        }
+    };
+    child.stdin = if let Some(mut child_in) = child.stdin.take() {
+        child_in.write(result.as_bytes());
+        Some(child_in)
+    } else {
+        None
+    };
+    child.wait();
+
+}
+
+fn execute_middle_command(command: String, mut result: String) -> Option<String> {
+
+    let  builtin_command_list = [String::from("exit"),String::from("pwd"),String::from("cd"),String::from("export"),String::from("unset")];
+    let mut buf = single_command_vector(command);
+    if(buf.len() == 0) {
+        println!("empty command between pipes");
+        std::io::stdout().flush().unwrap();
+        return None;
+    }
+    if(builtin_command_list.contains(&buf[0])){
+        let output = execute_env_commands(buf);
+        return output;
+    }
+
+    let mut output = Command::new(&buf[0]);
+    for i in (1..buf.len()) {
+        output.arg(&buf[i]);
+    }
+    output.stdout(Stdio::piped());
+    output.stdin(Stdio::piped());
+    let mut child = output.spawn().unwrap();
+    
+    if let Some(mut child_in) = child.stdin.take() {
+        child_in.write(result.as_bytes());
+    } else {
+        println!("not able to read result from previous pipe");
+        return None;
+    }
+    result.clear();
+    if let Some(mut child_out) = child.stdout.take() {
+        child_out.read_to_string(&mut result);
+    } else {
+        println!("failed to write the output in pipe");
+        return None;
+    }
+    child.wait();
+
+    return Some(result);
+}
+
+fn execute_command(mut command_list:VecDeque<String>) {
+
+    let  builtin_command_list = [String::from("exit"),String::from("pwd"),String::from("cd"),String::from("export"),String::from("unset")];
+
+    if command_list.len() >= 2 {
+
+        let mut result = String::new();
+        let first_command = command_list.pop_front().unwrap();
+        let last_command = command_list.pop_back().unwrap();
+
+        ///executing first command in piped_commands
+        match execute_first_command(first_command) {
+            Some(output) => {
+                result = output;
+            },
+            None => {
+                return;
+            }
+        }
+        
+
+        ///executing middle command in piped_commands
+        for command in command_list {
+
+            let output = execute_middle_command(command, result);
+            match output {
+                Some(output) => {
+                    result = output;
+                }
+                None => {
+                    return;
+                }
+            }
+        }
+        
+        ////executing last command in piped_commands
+        execute_last_command(last_command, result);
+        
+        
+
+    }
+    else {
+        execute_direct_command(command_list[0].clone());
+    }
+}
+
+
+fn execute_env_commands(buf:Vec<String>) ->Option<String> {
+    let  builtin_command_list = [String::from("exit"),String::from("pwd"),String::from("cd"),String::from("export"),String::from("unset")];
+    if &buf[0] == &builtin_command_list[1] {
+
+        match env::current_dir() {
+            Ok(path) => {
+                match path.to_str() {
+                    Some(path) => {
+                        return Some(String::from(path));
+                    }
+                    None => {
+                        return Some(String::from("unknown"));
+                    }
+                }
+            },
+            Err(_) => {
+                return Some(String::from("unknown"));
+            }
+        }
+        
+    } else if &buf[0] == &builtin_command_list[2] {
+        handle_cd(buf);
+        return None;
+
+    } else {
+        println!("{}","to implement".red_front());
+        return None;
+    }
+}
+
 fn main() {
 
-    
-    
-    let builtin_command_list = vec![String::from("exit"),String::from("pwd"),String::from("cd"),String::from("export"),String::from("unset")];
     'mainloop: loop {
 
         print_shell_description(get_username(), get_current_location());
@@ -26,57 +265,10 @@ fn main() {
         let mut buf = command_input();
         if buf.len() == 0 {
             continue;
-        } else if buf == vec![String::from("exit")] {
-            break 'mainloop;
         }
 
-        if builtin_command_list.contains(&buf[0]) {
-            if &buf[0] == &builtin_command_list[1] {
+        execute_command(buf);
 
-                match env::current_dir() {
-                    Ok(path) => {
-                        match path.to_str() {
-                            Some(path) => {
-                                println!("{path}");
-                            }
-                            None => {
-                                println!("unknown");
-                            }
-                        }
-                    },
-                    Err(_) => {
-                        println!("unknown");
-                    }
-                }
-                
-            } else if &buf[0] == &builtin_command_list[2] {
-
-                handle_cd(buf);
-
-            } else {
-                println!("{}","to implement".red_front());
-            }
-
-            
-        }
-        else {
-            let mut output = Command::new(&buf[0]);
-            for i in (1..buf.len()) {
-                output.arg(&buf[i]);
-            }
-            let child = output.spawn();
-            println!("{:#?}",child);
-            match child {
-                Ok(mut child) => {
-                    println!("{:#?}",child);
-                    child.wait();
-                    println!("done process");
-                },
-                Err(_) => {
-                    println!("No such file or directory");
-                }
-            }
-        }
     }
     
 }
@@ -138,15 +330,25 @@ fn print_shell_description(username: String,current_location: Vec<String> ) {
     std::io::stdout().flush().unwrap();
 }
 
-fn command_input() -> Vec<String> {
+fn command_input() -> VecDeque<String> {
 
     let mut buf = String::new();
     stdin().read_line(&mut buf).expect(("cannot read from commandline".red_front().bold()).as_str());
     buf = String::from(buf.trim());
+    // let buf = String::from("cat Cargo.lock | uniq | wc -l");
+    if buf == String::from("exit") {
+        exit(0);
+    }
         
-    let buf :Vec<String> = buf.split_ascii_whitespace().map(|args|  String::from(args.trim())).collect();
+    let buf :VecDeque<String> = buf.split("|").map(|args|  String::from(args.trim())).collect();
     return buf;
 
+}
+
+fn single_command_vector(buf:String) -> Vec<String> {
+    let buf = String::from(buf.trim());
+    let buf: Vec<String> = buf.split_whitespace().map(|args|  String::from(args.trim())).collect();
+    return buf;
 }
 
 // let custom = Error::new(std::io::ErrorKind::AddrInUse, "rand");
