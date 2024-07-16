@@ -8,6 +8,9 @@ use std::env;
 pub mod lib;
 use lib::TextStyler;
 
+pub mod input;
+use input::command_input;
+
 // enum builtin_command_list {
 //     cd,
 //     exit
@@ -331,20 +334,7 @@ fn print_shell_description(username: String,current_location: Vec<String> ) {
     std::io::stdout().flush().unwrap();
 }
 
-fn command_input() -> VecDeque<String> {
 
-    let mut buf = String::new();
-    stdin().read_line(&mut buf).expect(("cannot read from commandline".red_front().bold()).as_str());
-    buf = String::from(buf.trim());
-    // let buf = String::from("cat Cargo.lock | uniq | wc -l");
-    if buf == String::from("exit") {
-        exit(0);
-    }
-        
-    let buf :VecDeque<String> = buf.split("|").map(|args|  String::from(args.trim())).collect();
-    return buf;
-
-}
 
 fn single_command_vector(buf:String) -> Vec<String> {
     let buf = String::from(buf.trim());
