@@ -1,16 +1,37 @@
 #![allow(warnings)]
 //extern crate text_styler;
 use std::collections::VecDeque;
-use std::io::{stdin, Error, Read, Write};
+use std::io::{self, stdin, Error, Read, Write};
 use std::process::{exit, Child, Command, Output, Stdio};
 use std::env;
+//use termion;
 
 pub mod lib;
 use lib::TextStyler;
 
-pub mod input;
-use input::command_input;
 
+    pub mod input;
+    use input::command_input;
+
+fn main() {
+
+    'mainloop: loop {
+
+        print_shell_description(get_username(), get_current_location());
+        
+        let mut buf = command_input();
+        if buf.len() == 0 {
+            continue;
+        }
+        //io::stdout().into_raw_mode().unwrap();
+        //command_input();
+
+        //execute_command(buf);
+        break;
+    }
+    //println!("randome thing");
+    
+}
 // enum builtin_command_list {
 //     cd,
 //     exit
@@ -260,22 +281,6 @@ fn execute_env_commands(buf:Vec<String>) ->Option<String> {
     }
 }
 
-fn main() {
-
-    'mainloop: loop {
-
-        print_shell_description(get_username(), get_current_location());
-        
-        let mut buf = command_input();
-        if buf.len() == 0 {
-            continue;
-        }
-
-        execute_command(buf);
-
-    }
-    
-}
 
 fn handle_cd(buf:Vec<String>) {
     if(buf.len() == 1) {

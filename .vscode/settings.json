@@ -1,0 +1,16 @@
+{
+    "files.associations": {
+        "unistd.h": "c",
+        "termios.h": "c",
+        "termios-struct.h": "c",
+        "ttydefaults.h": "c",
+        "termios-c_iflag.h": "c",
+        "termios-c_oflag.h": "c",
+        "termios-c_cc.h": "c",
+        "termios-baud.h": "c",
+        "termios-c_cflag.h": "c",
+        "termios-c_lflag.h": "c",
+        "termios-tcflow.h": "c",
+        "termios-misc.h": "c"
+    }
+}
