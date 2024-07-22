@@ -8,10 +8,9 @@ use std::env;
 
 pub mod lib;
 use lib::TextStyler;
-
-
-    pub mod input;
-    use input::command_input;
+pub mod input;
+use input::command_input;
+const INTERRUPT_STRING:&str = "\u{3}";
 
 fn main() {
 
@@ -23,11 +22,15 @@ fn main() {
         if buf.len() == 0 {
             continue;
         }
+        if buf[0] == String::from(INTERRUPT_STRING) {
+            continue;
+        }
         //io::stdout().into_raw_mode().unwrap();
         //command_input();
+        println!("{:#?}",buf);
+        io::stdout().flush().unwrap();
 
-        //execute_command(buf);
-        break;
+        execute_command(buf);
     }
     //println!("randome thing");
     
@@ -45,6 +48,55 @@ fn main() {
 /// if empty string then do nothing
 /// if env command then calls execute env command
 /// for rest commands spawns child process and waits for its finish
+fn execute_command(mut command_list:VecDeque<String>) {
+
+    println!("execute command called");
+    io::stdout().flush().unwrap();
+    return;
+
+    let  builtin_command_list = [String::from("exit"),String::from("pwd"),String::from("cd"),String::from("export"),String::from("unset")];
+
+    if command_list.len() >= 2 {
+
+        let mut result = String::new();
+        let first_command = command_list.pop_front().unwrap();
+        let last_command = command_list.pop_back().unwrap();
+
+        ///executing first command in piped_commands
+        match execute_first_command(first_command) {
+            Some(output) => {
+                result = output;
+            },
+            None => {
+                return;
+            }
+        }
+        ///executing middle command in piped_commands
+        for command in command_list {
+
+            let output = execute_middle_command(command, result);
+            match output {
+                Some(output) => {
+                    result = output;
+                }
+                None => {
+                    return;
+                }
+            }
+        }
+        
+        ////executing last command in piped_commands
+        execute_last_command(last_command, result);
+        
+        
+
+    }
+    else {
+        execute_direct_command(command_list[0].clone());
+    }
+    exit(0);
+}
+
 fn execute_direct_command(command: String) {
     let  builtin_command_list = [String::from("exit"),String::from("pwd"),String::from("cd"),String::from("export"),String::from("unset")];
 
@@ -204,51 +256,6 @@ fn execute_middle_command(command: String, mut result: String) -> Option<String>
     return Some(result);
 }
 
-fn execute_command(mut command_list:VecDeque<String>) {
-
-    let  builtin_command_list = [String::from("exit"),String::from("pwd"),String::from("cd"),String::from("export"),String::from("unset")];
-
-    if command_list.len() >= 2 {
-
-        let mut result = String::new();
-        let first_command = command_list.pop_front().unwrap();
-        let last_command = command_list.pop_back().unwrap();
-
-        ///executing first command in piped_commands
-        match execute_first_command(first_command) {
-            Some(output) => {
-                result = output;
-            },
-            None => {
-                return;
-            }
-        }
-        
-
-        ///executing middle command in piped_commands
-        for command in command_list {
-
-            let output = execute_middle_command(command, result);
-            match output {
-                Some(output) => {
-                    result = output;
-                }
-                None => {
-                    return;
-                }
-            }
-        }
-        
-        ////executing last command in piped_commands
-        execute_last_command(last_command, result);
-        
-        
-
-    }
-    else {
-        execute_direct_command(command_list[0].clone());
-    }
-}
 
 
 fn execute_env_commands(buf:Vec<String>) ->Option<String> {
