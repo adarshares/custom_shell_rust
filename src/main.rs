@@ -27,12 +27,11 @@ fn main() {
         }
         //io::stdout().into_raw_mode().unwrap();
         //command_input();
-        println!("{:#?}",buf);
-        io::stdout().flush().unwrap();
+        println!("command running in main fn {:#?}",buf);
+        //io::stdout().flush().unwrap();
 
-        execute_command(buf);
+        //execute_command(buf);
     }
-    //println!("randome thing");
     
 }
 // enum builtin_command_list {

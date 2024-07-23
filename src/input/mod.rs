@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, ffi::{c_int, CStr}, io::{self, stdin, Read, Write}, os::fd::AsRawFd, process::exit, thread::JoinHandle};
+use std::{collections::VecDeque, ffi::{c_int, CStr}, io::{self, stdin, Read, Write}, os::fd::AsRawFd, process::exit, thread::{self, JoinHandle}, time::{self, Duration}};
 
 use crate::lib::TextStyler;
 
@@ -69,6 +69,7 @@ extern "C" {
     fn getpid() -> i32;
     fn getppid() -> i32;
     fn kill(pid: i32, sig: i32) -> i32;
+    fn waitpid(pid: i32, statloc: *mut i32, options: i32) -> i32;
 }
 /*
 int tcgetattr(int fd, struct termios *termios_p);
@@ -79,6 +80,7 @@ pub fn command_input() -> VecDeque<String> {
 
     let mut termios;
     let mut original_termios;
+    /// terminal settings
     unsafe {
         termios = std::mem::zeroed();
         tcgetattr(0, &mut termios);
@@ -87,6 +89,7 @@ pub fn command_input() -> VecDeque<String> {
         tcsetattr(0, 0, &mut termios);
     }
 
+    /// declaration of required variables
     let mut args: Vec<String> = Vec::new();
     let mut buf = String::new();
     let mut c: [u8; 1] = [0];
@@ -94,52 +97,112 @@ pub fn command_input() -> VecDeque<String> {
     let mut stdout = io::stdout();
     let mut child_pid = -1;
 
-    buf.clear();
+    /// loop to take input
     loop {
+        /// check for child process
+        match child_pid {
+            -1|0 => {
+                
+            }
+            child_pid_copy => {
+                unsafe{
+                    let mut null = 0 as *mut i32;
+                    let retval = waitpid(child_pid_copy, null, 0);
+                    match retval {
+                        0|-1 => {
+                            println!("idhar aaya");
+                            break;
+                        }
+                        _ => {
+                            //continue taking character
+                        }
+                    }
+                }
+            }
+        }
+
+        /// taking character by character input
         stdin().read_exact(&mut c).expect("unable to read".red_front().as_str());
 
+        /// processing character by character
         match c {
+            /// handelling ctrl+c
             [INTERRUPT_EXIT] => {
                 match child_pid {
                     -1 => {
                         break;
-                        
                     }
-                    child_pic => {
-                        
+                    child_pid_copy => {
+                        unsafe {
+                            match kill(child_pid_copy, SIGKILL) {
+                                -1 => {
+                                    println!("not able to kill child process");
+                                    exit(1);
+                                }
+                                _ => {
+                                    println!("killed child process");
+                                    child_pid = -1;
+                                }
+                            }
+                        }
+                        break;
                     }
                 }
                 
-            }
+            },
+            /// handelling backspace
             [BACKSPACE] => {
                 if buf.len() == 0 {
                     continue;
                 } else {
-                    //write!(stdout,"{}",BACKSPACE);
-                    //write!(stdout,"{}",buf.len());
                     buf.pop();
                     write!(stdout,"{}", ('\u{8}' as char));
                     write!(stdout," ");
                     write!(stdout,"{}", ('\u{8}' as char));
                     stdout.flush();
                 }
-            }
+            },
+            /// when pressed enter check for child process
             [CARRIAGE_RETURN] => {
                 write!(stdout,"\n");
                 stdout.flush();
-                match option_handle {
-                    Some(handle) => {
-                        //handle.join();
-                        buf.clear();
-                        break;
-                    }
-                    None => {
-                        //spawn thread
+                match child_pid {
+                    -1 => {
+                        //create process
+                        unsafe {
+                            match fork() {
+                                -1 => {
+                                    println!("not able to create child process");
+                                    //stdout.flush();
+                                    exit(1);
+                                }
+                                0 =>{
+                                    // child code
+                                    thread::sleep(Duration::from_secs(5));
+                                    println!("created child process and calling functions");
+                                    
+                                    exit(0);
+                                }
+                                fork_child_pid =>{
+                                    //parent code
+                                    child_pid = fork_child_pid;
+                                    println!("parent code");
+                                    //stdout.flush();
+                                }
+                            }
+                        }
+                    },
+                    _ => {
+                        println!("child process exists then pressed enter");
+                        //stdout.flush();
                         break;
                     }
                 }
+                
             },
+            /// TODO tab for autocomplete and suggest
             [TAB_CHAR] => {},
+            /// pushing other characters into buffer string
             [c] => {
                 write!(stdout,"{}",c as char);
                 stdout.flush();

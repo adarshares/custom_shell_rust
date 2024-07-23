@@ -12,6 +12,7 @@
         "termios-c_lflag.h": "c",
         "termios-tcflow.h": "c",
         "termios-misc.h": "c",
-        "signal.h": "c"
+        "signal.h": "c",
+        "wait.h": "c"
     }
 }
