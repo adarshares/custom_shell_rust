@@ -108,13 +108,16 @@ pub fn command_input()  {
             [INTERRUPT_EXIT] => {
                 
                 buf.clear();
-                match child.take() {
+                child = match child.take() {
                     Some(mut child_process) => {
                         println!("killing");
                         child_process.kill().expect("not able to kill child process");
+                        None
                     }
-                    None => {}
-                }
+                    None => {
+                        None
+                    }
+                };
                 // write!(stdout,"\n");
                 // stdout.flush();
                 println!("");
@@ -138,17 +141,22 @@ pub fn command_input()  {
                     println!();
                     break;
                 }
+                let mut ischild = false;
                 child = match child.take() {
                     Some(mut child_process) => {
                         //buf.clear();
                         //println!();
                         match child_process.try_wait() {
-                            Ok(_) => {
+                            Ok(Some(status)) => {
                                 // child process exited
                                 None
                             },
+                            Ok(None) => {
+                                continue;
+                            },
                             Err(_) => {
                                 // still running child
+                                ischild = true;
                                 Some(child_process)
                             }
                         }
@@ -157,11 +165,8 @@ pub fn command_input()  {
                         None
                     }
                 };
-                match child {
-                    Some(_) => {
-                        continue;
-                    },
-                    None => {}
+                if ischild {
+                    continue;
                 }
                 write!(stdout,"\n");
                 stdout.flush();
