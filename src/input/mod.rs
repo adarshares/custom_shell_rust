@@ -90,10 +90,10 @@ pub fn command_input()  {
     }
 
     /// declaration of required variables
-    let mut buf = Arc::new(Mutex::new(String::new()));
+    let mut buf = String::new();
     let mut c: [u8; 1] = [0];
     let mut stdout = io::stdout();
-    let mut child: Arc<Mutex<Option<Child>>> = Arc::new(Mutex::new(None));
+    let mut child: Option<Child> = None;
     
 
     /// loop to take input
@@ -106,25 +106,26 @@ pub fn command_input()  {
         match c {
             /// handelling ctrl+c
             [INTERRUPT_EXIT] => {
-                {
-                    let mut mutex_child = &mut *child.lock().unwrap(); 
-                    kill_child(mutex_child);
+                
+                buf.clear();
+                match child.take() {
+                    Some(mut child_process) => {
+                        println!("killing");
+                        child_process.kill().expect("not able to kill child process");
+                    }
+                    None => {}
                 }
-                {
-                    let mut buf_copy = buf.lock().unwrap();
-                    (*buf_copy).clear();
-                }
-                write!(stdout,"\n");
-                stdout.flush();
+                // write!(stdout,"\n");
+                // stdout.flush();
+                println!("");
                 print_shell_description(get_username(), get_current_location());
             },
             /// handelling backspace
             [BACKSPACE] => {
-                let mut buf_string = buf.lock().unwrap();
-                if buf_string.len() == 0 {
+                if buf.len() == 0 {
                     continue;
                 } else {
-                    buf_string.pop();
+                    buf.pop();
                     write!(stdout,"{}", ('\u{8}' as char));
                     write!(stdout," ");
                     write!(stdout,"{}", ('\u{8}' as char));
@@ -133,22 +134,45 @@ pub fn command_input()  {
             },
             /// when pressed enter check for child process
             [CARRIAGE_RETURN] => {
-                //first check child process
+                if(buf.trim() == String::from("exit")){
+                    println!();
+                    break;
+                }
+                child = match child.take() {
+                    Some(mut child_process) => {
+                        //buf.clear();
+                        //println!();
+                        match child_process.try_wait() {
+                            Ok(_) => {
+                                // child process exited
+                                None
+                            },
+                            Err(_) => {
+                                // still running child
+                                Some(child_process)
+                            }
+                        }
+                    },
+                    None => {
+                        None
+                    }
+                };
+                match child {
+                    Some(_) => {
+                        continue;
+                    },
+                    None => {}
+                }
                 write!(stdout,"\n");
                 stdout.flush();
-                let mut child_clone = Arc::clone(&child);
-                let piped_command = Arc::clone(&buf);
-                let mut command_string = String::new();
-                {
-                    let mut buf_string = buf.lock().unwrap();
-                    command_string = (*buf_string).clone();
-                    (*buf_string).clear();
-                }
-                thread::spawn(move || {
-                    run_command(child_clone,separate_pipes(command_string));
-                    println!("this");
-                    print_shell_description(get_username(), get_current_location());
-                });
+                child = Some(Command::new("target/debug/child").arg(buf).spawn().unwrap());
+                buf = String::new();
+                //println!("child ko spawn kar diya");
+                // thread::spawn(move || {
+                //     run_command(child_clone,separate_pipes(command_string));
+                //     println!("this");
+                //     print_shell_description(get_username(), get_current_location());
+                // });
             },
             /// TODO tab for autocomplete and suggest
             [TAB_CHAR] => {},
@@ -156,12 +180,16 @@ pub fn command_input()  {
             [c] => {
                 write!(stdout,"{}",c as char);
                 stdout.flush();
-                {
-                    let mut buf_string = buf.lock().unwrap();
-                    (*buf_string).push(c as char);
-                }
+                buf.push(c as char);
             },
         }
+    }
+
+    match child.take() {
+        Some(mut child) => {
+            child.kill();
+        },
+        None => {}
     }
 
     unsafe {
@@ -190,189 +218,6 @@ fn kill_child( mutex_child: &mut Option<Child>) {
     }
 }
 
-fn execute_command(mut command_list:VecDeque<String>,some_child: Arc<Mutex<Option<Child>>>) {
-
-
-    let  builtin_command_list = [String::from("exit"),String::from("pwd"),String::from("cd"),String::from("export"),String::from("unset")];
-
-    if command_list.len() >= 2 {
-
-        // let mut result = String::new();
-        // let first_command = command_list.pop_front().unwrap();
-        // let last_command = command_list.pop_back().unwrap();
-
-        // ///executing first command in piped_commands
-        // match execute_first_command(first_command) {
-        //     Some(output) => {
-        //         result = output;
-        //     },
-        //     None => {
-        //         return;
-        //     }
-        // }
-        // ///executing middle command in piped_commands
-        // for command in command_list {
-
-        //     let output = execute_middle_command(command, result);
-        //     match output {
-        //         Some(output) => {
-        //             result = output;
-        //         }
-        //         None => {
-        //             return;
-        //         }
-        //     }
-        // }
-        
-        // ////executing last command in piped_commands
-        // execute_last_command(last_command, result);
-        
-        
-
-    }
-    else 
-    {
-        execute_direct_command(command_list[0].clone(),some_child);
-        println!("executed direct");
-    }
-    //exit(0);
-}
-
-fn execute_first_command(first_command: String, some_child: Arc<Mutex<Option<Child>>>) -> Option<String>{
-    let  builtin_command_list = [String::from("exit"),String::from("pwd"),String::from("cd"),String::from("export"),String::from("unset")];
-    let mut buf = single_command_vector(first_command);
-    if(buf.len() == 0) {
-        println!("cannont start with pipe");
-        std::io::stdout().flush().unwrap();
-        return None;
-    }
-    if(builtin_command_list.contains(&buf[0])){
-        let output = execute_env_commands(buf);
-        return output;
-    }
-
-    let mut result = String::new();
-
-    let mut output = Command::new(&buf[0]);
-    for i in (1..buf.len()) {
-        output.arg(&buf[i]);
-    }
-    output.stdout(Stdio::piped());
-    let mut child = match output.spawn() {
-        Ok(child) => {
-            // {
-            //     let mut mutex_child = &mut *some_child.lock().unwrap();
-            //     *mutex_child = Some(child);
-            //     //(*mutex_child).wait();
-            // }
-            child
-        }
-        Err(_) => {
-            println!("failed to spawn child");
-            return None;
-        }
-    };
-    if let Some(mut child_out) = child.stdout.take() {
-        child_out.read_to_string(&mut result);
-    } else {
-        println!("failed to write the output in pipe");
-        return None;
-    }
-    child.wait();
-    return Some(result);
-}
-
-
-fn execute_direct_command(command: String,some_child: Arc<Mutex<Option<Child>>>) {
-
-    let  builtin_command_list = [String::from("exit"),String::from("pwd"),String::from("cd"),String::from("export"),String::from("unset")];
-    let buf = single_command_vector(command);
-
-    if buf.len() == 0 {
-        println!("");
-        return;
-    }
-    if(builtin_command_list.contains(&buf[0])){
-        let output = execute_env_commands(buf);
-        match output {
-            Some(output) => {
-                println!("{}",output);
-            },
-            None => {return;}
-        }
-        return;
-    }
-    //println!("trying to acquire child lock");     
-        
-    let mut output = Command::new(&buf[0]);
-    for i in (1..buf.len()) {
-        output.arg(&buf[i]);
-    }
-    let child = output.spawn();
-    match child {
-        Ok(mut child) => {
-            {
-                let mut mutex_child = &mut *some_child.lock().unwrap();
-                *mutex_child = Some(child);
-                //rem this
-                match (&mut *mutex_child) {
-                    Some(ch) => {
-                        ch.wait();
-                    },
-                    None => {
-                        return;
-                    }
-                }
-            }
-            //let x = child.wait();
-            //child.wait();
-        },
-        Err(_) => {
-            println!("No such file or directory");
-        }
-    }
-}
-
-fn single_command_vector(buf:String) -> Vec<String> {
-    let buf = String::from(buf.trim());
-    let buf: Vec<String> = buf.split_whitespace().map(|args|  String::from(args.trim())).collect();
-    return buf;
-}
-
-fn run_command(some_child: Arc<Mutex<Option<Child>>>, command_list: VecDeque<String>) {
-    execute_command(command_list,some_child);
-}
-
-fn execute_env_commands(buf:Vec<String>) ->Option<String> {
-    let  builtin_command_list = [String::from("exit"),String::from("pwd"),String::from("cd"),String::from("export"),String::from("unset")];
-    if &buf[0] == &builtin_command_list[1] {
-
-        match env::current_dir() {
-            Ok(path) => {
-                match path.to_str() {
-                    Some(path) => {
-                        return Some(String::from(path));
-                    }
-                    None => {
-                        return Some(String::from("unknown"));
-                    }
-                }
-            },
-            Err(_) => {
-                return Some(String::from("unknown"));
-            }
-        }
-        
-    } else if &buf[0] == &builtin_command_list[2] {
-        handle_cd(buf);
-        return None;
-
-    } else {
-        println!("{}","to implement".red_front());
-        exit(0);
-        return None;
-    }
-}
 
 fn handle_cd(buf:Vec<String>) {
     if(buf.len() == 1) {
