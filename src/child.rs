@@ -1,6 +1,6 @@
 #![allow(warnings)]
 
-use std::{collections::VecDeque, env::{self, Args}, io::{Read, Write}, process::{exit, Command, Stdio}};
+use std::{collections::VecDeque, env::{self, Args}, io::{self, Read, Write}, process::{exit, Command, Stdio}, thread, time::Duration};
 
 pub mod lib;
 use lib::TextStyler;
@@ -9,12 +9,16 @@ use lib::TextStyler;
 fn executer(command_args: Vec<String>) {
     run_command(separate_pipes(command_args[1].clone()));
     print_shell_description(get_username(), get_current_location());
-    exit(0);
-
 }
 fn main() {
     let x = env::args();
     executer(env::args().collect());
+    // println!("first line executed");
+    // println!("child process exiting");
+    // io::stdout().flush();
+    // thread::sleep(Duration::from_secs(5));
+    // println!("child process exiting");
+    io::stdout().flush();
 }
 
 fn execute_command(mut command_list:VecDeque<String>) {

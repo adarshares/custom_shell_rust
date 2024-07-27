@@ -112,6 +112,7 @@ pub fn command_input()  {
                     Some(mut child_process) => {
                         println!("killing");
                         child_process.kill().expect("not able to kill child process");
+                        child_process.wait();
                         None
                     }
                     None => {
@@ -149,9 +150,11 @@ pub fn command_input()  {
                         match child_process.try_wait() {
                             Ok(Some(status)) => {
                                 // child process exited
+                                child_process.wait();
                                 None
                             },
                             Ok(None) => {
+                                child_process.wait();
                                 continue;
                             },
                             Err(_) => {
@@ -172,12 +175,7 @@ pub fn command_input()  {
                 stdout.flush();
                 child = Some(Command::new("target/debug/child").arg(buf).spawn().unwrap());
                 buf = String::new();
-                //println!("child ko spawn kar diya");
-                // thread::spawn(move || {
-                //     run_command(child_clone,separate_pipes(command_string));
-                //     println!("this");
-                //     print_shell_description(get_username(), get_current_location());
-                // });
+
             },
             /// TODO tab for autocomplete and suggest
             [TAB_CHAR] => {},
