@@ -106,22 +106,16 @@ pub fn command_input()  {
         match c {
             /// handelling ctrl+c
             [INTERRUPT_EXIT] => {
-                
                 buf.clear();
-                child = match child.take() {
-                    Some(mut child_process) => {
-                        println!("killing");
-                        child_process.kill().expect("not able to kill child process");
+                match child.take() {
+                    Some (mut child_process)=> {
+                        child_process.kill().expect("cannot kill child process");
                         child_process.wait();
-                        None
-                    }
-                    None => {
-                        None
-                    }
+                    },
+                    None => {}
                 };
-                // write!(stdout,"\n");
-                // stdout.flush();
-                println!("");
+                write!(stdout,"\n");
+                stdout.flush();
                 print_shell_description(get_username(), get_current_location());
             },
             /// handelling backspace
@@ -138,44 +132,38 @@ pub fn command_input()  {
             },
             /// when pressed enter check for child process
             [CARRIAGE_RETURN] => {
+                write!(stdout,"\n");
+                stdout.flush();
                 if(buf.trim() == String::from("exit")){
-                    println!();
                     break;
                 }
-                let mut ischild = false;
                 child = match child.take() {
                     Some(mut child_process) => {
-                        //buf.clear();
-                        //println!();
                         match child_process.try_wait() {
-                            Ok(Some(status)) => {
-                                // child process exited
+                            Ok(Some(_)) => {
+                                //exited zombie
+                                child_process.kill();
                                 child_process.wait();
                                 None
-                            },
+                            }
                             Ok(None) => {
-                                child_process.wait();
-                                continue;
-                            },
-                            Err(_) => {
-                                // still running child
-                                ischild = true;
+                                //still running
                                 Some(child_process)
                             }
+                            Err(_) => {
+                                //
+                                None
+                            }
                         }
+                        //continue;
                     },
                     None => {
                         None
                     }
                 };
-                if ischild {
-                    continue;
-                }
-                write!(stdout,"\n");
-                stdout.flush();
+
                 child = Some(Command::new("target/debug/child").arg(buf).spawn().unwrap());
                 buf = String::new();
-
             },
             /// TODO tab for autocomplete and suggest
             [TAB_CHAR] => {},
@@ -186,13 +174,6 @@ pub fn command_input()  {
                 buf.push(c as char);
             },
         }
-    }
-
-    match child.take() {
-        Some(mut child) => {
-            child.kill();
-        },
-        None => {}
     }
 
     unsafe {
