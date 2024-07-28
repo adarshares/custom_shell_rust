@@ -14,25 +14,10 @@ const INTERRUPT_STRING:&str = "\u{3}";
 
 fn main() {
 
-    // 'mainloop: loop {
-
         print_shell_description(get_username(), get_current_location());
-        
-    //     let mut buf = command_input();
         command_input();
-    //     if buf.len() == 0 {
-    //         continue;
-    //     }
-    //     if buf[0] == String::from(INTERRUPT_STRING) {
-    //         continue;
-    //     }
-    //     //io::stdout().into_raw_mode().unwrap();
-    //     //command_input();
-    //     //println!("command running in main fn {:#?}",buf);
-    //     //io::stdout().flush().unwrap();
-
-    //     //execute_command(buf);
-    // }
+        //Command::new("./a.out").spawn().unwrap().wait();
+    
     
 }
 // enum builtin_command_list {
