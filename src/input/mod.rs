@@ -101,7 +101,7 @@ fn raw_mode() ->(Termios,Termios) {
         termios = std::mem::zeroed();
         tcgetattr(0, &mut termios);
         original_termios = clone(&termios);
-        termios.c_lflag = (!ISIG)&(!ECHO);
+        termios.c_lflag &= ((!ISIG)&(!ECHO)&(!ICANON));
         tcsetattr(0, 0, &mut termios);
     }
 
@@ -158,7 +158,8 @@ pub fn command_input()  {
                 }
             },
             /// when pressed enter check for child process
-            [CARRIAGE_RETURN] => {
+            /// NEW_LINE for mac CARRIAGE_RETURN for linux
+            [CARRIAGE_RETURN]|[NEW_LINE] => {
                 write!(stdout,"\n");
                 stdout.flush();
                 if(buf.trim() == String::from("exit")){
@@ -167,7 +168,6 @@ pub fn command_input()  {
                 unraw_mode(&mut original_termios);
                 run_command(separate_pipes(buf));
                 (termios,_) = raw_mode();
-                let (mut termios, mut original_termios) = raw_mode();
                 print_shell_description(get_username(), get_current_location());
                 buf = String::new();
             },
